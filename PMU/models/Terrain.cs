@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Net;
 
 namespace PMU.models
 {
@@ -13,6 +14,9 @@ namespace PMU.models
     {
         private List<Horses> horses;
         private Timer timer;
+        private bool raceStarted = false;
+        private int lapsToWin = 3; // Nombre de tours requis pour gagner
+        private double enduranceThreshold = 0.7; // Seuil de distance pour activer l'endurance
 
         public Terrain()
         {
@@ -26,6 +30,26 @@ namespace PMU.models
             timer.Interval = 100; // Intervalle de mise à jour en millisecondes
             timer.Tick += Timer_Tick;
             timer.Start();
+
+            Button startButton = new Button();
+            startButton.Text = "Start";
+            startButton.Location = new Point(10, 10);
+            startButton.Click += StartButton_Click;
+            Controls.Add(startButton);
+        }
+
+        private void StartButton_Click(object sender, EventArgs e)
+        {
+            raceStarted = !raceStarted; // Inverser l'état de la course (démarrer ou arrêter)
+
+            if (raceStarted)
+            {
+                timer.Start(); // Démarrer la course
+            }
+            else
+            {
+                timer.Stop(); // Arrêter la course
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -37,6 +61,20 @@ namespace PMU.models
 
             int x = 90;
             int y = 90;
+
+            using (Pen startLinePen = new Pen(Color.White, 2))
+            {
+                int startLineY = ClientRectangle.Y + ClientRectangle.Height / 2;
+                int startLineX = ClientRectangle.X; // Début de la ligne de départ (limite du terrain)
+
+                // Calculer la position X de la fin de la ligne de départ (limite de la piste blanche)
+                double endLineX = ClientRectangle.X + ClientRectangle.Width - (x * 6.8);
+
+                Point startPoint = new Point(startLineX, startLineY);
+                Point endPoint = new Point((int)endLineX, startLineY);
+
+                e.Graphics.DrawLine(startLinePen, startPoint, endPoint);
+            }
 
             for (int i = 0; i < 1; i++)
             {
@@ -62,27 +100,66 @@ namespace PMU.models
         {
             List<Horses> horses = new List<Horses>();
 
-            // Exemple de création de chevaux
-            horses.Add(new Horses("Cheval 1", 150, 100, 20, 20, Color.Red, 10, 100));
-            horses.Add(new Horses("Cheval 2", 100, 100, 20, 20, Color.Blue, 7, 80));
-            horses.Add(new Horses("Cheval 3", 90, 150, 20, 20, Color.Green, 6, 90));
+            int startLineY = ClientRectangle.Y + ClientRectangle.Height / 2;
+            int startLineX = ClientRectangle.X; // Début de la ligne de départ (limite du terrain)
+
+            // Calculer la position X de la fin de la ligne de départ (limite de la piste blanche)
+            double endLineX = ClientRectangle.X + ClientRectangle.Width - (90 * 6.8);
+
+            horses.Add(new Horses("Cheval 1", startLineX, startLineY, 20, 20, Color.Red, 3, 50)); // Ajout de l'endurance pour le premier cheval
+            horses.Add(new Horses("Cheval 2", startLineX + 30, startLineY, 20, 20, Color.Blue, 3, 20)); // Ajout de l'endurance pour le deuxième cheval
+            horses.Add(new Horses("Cheval 3", startLineX + 70, startLineY, 20, 20, Color.Green, 4, 10)); // Ajout de l'endurance pour le troisième cheval
 
             // Ajoutez plus de chevaux selon vos besoins
+
             return horses;
         }
 
         private async void Timer_Tick(object sender, EventArgs e)
         {
+            if (!raceStarted)
+            {
+                return; // Ne rien faire si la course n'a pas commencé
+            }
+
+            int finishCount = 0; // Compteur de chevaux ayant terminé la course
+
             foreach (Horses horse in horses)
             {
+                if (horse.ToursEffectues >= lapsToWin)
+                {
+                    finishCount++;
+
+                   
+                }
+
+                if (horse.Speed == 0)
+                {
+                    continue; // Passer au cheval suivant si celui-ci est déjà arrêté
+                }
+
                 // Calculer la nouvelle position du cheval en fonction de sa vitesse
-                double angle = horse.Speed * Math.PI / 180.0; // Convertir la vitesse en angle en radians
                 double centerX = ClientRectangle.Width / 2.0;
                 double centerY = ClientRectangle.Height / 2.0;
+                double angle = Math.Atan2(horse.Y - centerY, horse.X - centerX);
+
 
                 // Calculer les nouvelles coordonnées du cheval en utilisant une rotation autour du centre de la piste
-                double newX = centerX + (horse.X - centerX) * Math.Cos(angle) - (horse.Y - centerY) * Math.Sin(angle);
-                double newY = centerY + (horse.X - centerX) * Math.Sin(angle) + (horse.Y - centerY) * Math.Cos(angle);
+                double distance = horse.Speed * Math.PI / 180.0; // Utilisation d'une vitesse constante
+                double newX = centerX + distance * Math.Cos(angle);
+                double newY = centerY + distance * Math.Sin(angle);
+
+                // Vérifier si le cheval a franchi la ligne de départ
+                double endLineX = ClientRectangle.X + ClientRectangle.Width - (90 * 6.8);
+                if (newX >= endLineX && horse.X < endLineX)
+                {
+                    horse.ToursEffectues++; // Incrémenter le compteur de tours pour ce cheval
+
+                    if (horse.ToursEffectues >= lapsToWin)
+                    {
+                        finishCount++; // Incrémenter le compteur de chevaux ayant terminé
+                    }
+                }
 
                 // Vérifier si les nouvelles coordonnées sont en dehors de la piste
                 double distanceFromCenter = Math.Sqrt(Math.Pow(newX - centerX, 2) + Math.Pow(newY - centerY, 2));
@@ -94,15 +171,31 @@ namespace PMU.models
                     newY = centerY + (newY - centerY) * scaleFactor;
                 }
 
+                // Mettre à jour les coordonnées du cheval
                 horse.X = (int)newX;
                 horse.Y = (int)newY;
+
+                // Vérifier si le cheval a atteint 70% du terrain
+                double progressPercentage = (horse.X - ClientRectangle.X) / (endLineX - ClientRectangle.X);
+                if (progressPercentage >= 0.7)
+                {
+                    // Ajouter l'endurance à la vitesse du cheval
+                    horse.Speed = horse.Speed + ((horse.Speed * horse.Endurance) / 100);
+                }
+            }
+
+            // Vérifier si tous les chevaux ont terminé la course
+            if (finishCount == horses.Count)
+            {
+                raceStarted = false;
+                timer.Stop();
+                MessageBox.Show("Tous les chevaux ont terminé la course !");
+                return;
             }
 
             // Redessiner le terrain
             Invalidate();
             await Task.Delay(50); // Délai avant la prochaine mise à jour
         }
-
-
     }
 }

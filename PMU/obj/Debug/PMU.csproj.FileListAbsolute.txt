@@ -8,3 +8,4 @@ D:\S4\prog\PMU\obj\Debug\PMU.csproj.GenerateResource.cache
 D:\S4\prog\PMU\obj\Debug\PMU.csproj.CoreCompileInputs.cache
 D:\S4\prog\PMU\obj\Debug\PMU.exe
 D:\S4\prog\PMU\obj\Debug\PMU.pdb
+D:\S4\prog\PMU\obj\Debug\PMU.models.Terrain.resources
